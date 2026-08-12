@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" role="img" aria-label="Schweizer Bundeswappen">
+  <path d="M28,6 H212 Q234,6 234,28 V140 Q234,190 120,254 Q6,190 6,140 V28 Q6,6 28,6 Z" fill="#D5261E"/>
+  <rect x="97" y="40" width="46" height="160" fill="#fff"/>
+  <rect x="40" y="97" width="160" height="46" fill="#fff"/>
+</svg>

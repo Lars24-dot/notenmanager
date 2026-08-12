@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notenmanager</title>
+<link rel="icon" type="image/svg+xml" href="assets/bundeswappen.svg">
+<link rel="stylesheet" href="css/style.css">
+<script>
+  (function () {
+    try {
+      var stored = localStorage.getItem('notenmanager.theme.v1');
+      var theme = (stored === 'light' || stored === 'dark')
+        ? stored
+        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<!-- Login-Gate: nur sichtbar, wenn Cloud-Sync konfiguriert und kein Nutzer angemeldet ist -->
+<div id="authGate" class="auth-gate" hidden>
+  <div class="auth-card">
+    <img src="assets/bundeswappen.svg" alt="" class="auth-emblem" width="44" height="48">
+    <h1 class="auth-title">Notenmanager</h1>
+    <p class="auth-subtitle">Melde dich an, um deine Noten geräteübergreifend zu synchronisieren.</p>
+
+    <form id="authForm" class="auth-form">
+      <label class="field">
+        <span class="field-label">E-Mail-Adresse</span>
+        <input type="email" id="authEmail" placeholder="du@beispiel.ch" required autocomplete="email">
+      </label>
+      <button type="submit" id="authSubmitBtn" class="btn btn-primary auth-submit">Login-Link senden</button>
+    </form>
+
+    <p id="authStatus" class="auth-status" hidden></p>
+  </div>
+</div>
+
+<div id="appRoot" hidden>
+
+<header class="app-header">
+  <div class="container header-inner">
+    <div class="app-brand">
+      <img src="assets/bundeswappen.svg" alt="" class="app-brand-emblem" width="28" height="32">
+      <h1 class="app-title">Notenmanager</h1>
+    </div>
+    <div class="header-actions">
+      <div class="school-type-toggle" role="tablist" aria-label="Schultyp">
+        <button type="button" class="toggle-btn" data-school-type="bm" role="tab" aria-selected="false">BM</button>
+        <button type="button" class="toggle-btn" data-school-type="vocational" role="tab" aria-selected="false">Berufsschule</button>
+      </div>
+      <button type="button" id="signOutBtn" class="link-btn" hidden>Abmelden</button>
+      <button type="button" id="themeToggleBtn" class="icon-btn" aria-label="Zu dunklem Modus wechseln">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <section class="year-nav">
+    <button type="button" id="prevYearBtn" class="icon-btn" aria-label="Vorheriges Schuljahr">&#8592;</button>
+    <div class="year-nav-center">
+      <select id="yearSelect" aria-label="Schuljahr auswählen"></select>
+      <button type="button" id="addYearBtn" class="link-btn">+ Schuljahr</button>
+    </div>
+    <button type="button" id="nextYearBtn" class="icon-btn" aria-label="Nächstes Schuljahr">&#8594;</button>
+  </section>
+
+  <section class="semester-tabs" role="tablist" aria-label="Semester">
+    <button type="button" class="tab-btn" data-semester="H1" role="tab" aria-selected="false">Sem1</button>
+    <button type="button" class="tab-btn" data-semester="H2" role="tab" aria-selected="false">Sem2</button>
+  </section>
+
+  <section class="summary-bar">
+    <div class="summary-item">
+      <span class="summary-label">Durchschnitt aller Fächer</span>
+      <span class="summary-value" id="overallAverage">–</span>
+    </div>
+  </section>
+
+  <section class="toolbar">
+    <div class="toolbar-group">
+      <button type="button" id="addGradeBtn" class="btn btn-primary">+ Note</button>
+      <button type="button" id="addSubjectBtn" class="btn btn-secondary">+ Fach</button>
+    </div>
+    <div class="toolbar-divider" aria-hidden="true"></div>
+    <div class="toolbar-group">
+      <button type="button" id="exportPdfBtn" class="btn btn-secondary">PDF exportieren</button>
+      <button type="button" id="chartBtn" class="btn btn-secondary">Notenverlauf</button>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <div class="toolbar-more">
+      <button type="button" id="moreMenuBtn" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Weitere Optionen">&#8942;</button>
+      <div id="moreMenu" class="dropdown-menu" hidden role="menu" aria-label="Weitere Optionen">
+        <button type="button" class="dropdown-item" id="exportJsonBtn" role="menuitem">Backup exportieren</button>
+        <button type="button" class="dropdown-item" id="importJsonBtn" role="menuitem">Backup importieren</button>
+        <div class="dropdown-divider" role="separator"></div>
+        <button type="button" class="dropdown-item dropdown-item-danger" id="deleteYearBtn" role="menuitem">Schuljahr löschen</button>
+      </div>
+    </div>
+    <input type="file" id="importJsonInput" accept="application/json" hidden>
+  </section>
+
+  <section id="subjectsContainer" class="subjects-container">
+    <!-- Fächer/Noten werden hier dynamisch gerendert -->
+  </section>
+
+  <p id="emptyState" class="empty-state" hidden>
+    Noch keine Fächer für diesen Schultyp. Füge dein erstes Fach hinzu, um loszulegen.
+  </p>
+
+</main>
+
+<footer class="app-footer">
+  <div class="container">
+    <span id="footerNote">Alle Daten werden lokal in deinem Browser gespeichert.</span>
+  </div>
+</footer>
+
+</div><!-- /#appRoot -->
+
+<!-- Modal: Note hinzufügen/bearbeiten -->
+<div id="gradeModal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gradeModalTitle">
+    <div class="modal-header">
+      <h2 id="gradeModalTitle">Note hinzufügen</h2>
+      <button type="button" class="modal-close" data-close-modal="gradeModal" aria-label="Schliessen">&times;</button>
+    </div>
+    <form id="gradeForm" class="modal-body">
+      <input type="hidden" id="gradeId">
+
+      <label class="field">
+        <span class="field-label">Fach</span>
+        <select id="gradeSubject" required></select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Notentyp / Beschreibung</span>
+        <input type="text" id="gradeType" placeholder="z.B. Test, Prüfung, Hausaufgaben" required>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Note</span>
+          <input type="number" id="gradeValue" min="1" max="6" step="0.01" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Gewichtung</span>
+          <input type="number" id="gradeWeight" min="0.1" step="0.1" value="1" required>
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Semester</span>
+          <select id="gradeSemester" required>
+            <option value="H1">Sem1</option>
+            <option value="H2">Sem2</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Schuljahr</span>
+          <input type="text" id="gradeYear" disabled>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-modal="gradeModal">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Fächer verwalten -->
+<div id="subjectModal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="subjectModalTitle">
+    <div class="modal-header">
+      <h2 id="subjectModalTitle">Fächer verwalten</h2>
+      <button type="button" class="modal-close" data-close-modal="subjectModal" aria-label="Schliessen">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="subjectForm" class="field-row">
+        <label class="field" style="flex:1">
+          <span class="field-label">Neues Fach</span>
+          <input type="text" id="newSubjectName" placeholder="z.B. Mathematik" required>
+        </label>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-end">Hinzufügen</button>
+      </form>
+      <ul id="subjectList" class="subject-list"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Notenverlauf Chart -->
+<div id="chartModal" class="modal-overlay" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="chartModalTitle">
+    <div class="modal-header">
+      <h2 id="chartModalTitle">Notenverlauf</h2>
+      <button type="button" class="modal-close" data-close-modal="chartModal" aria-label="Schliessen">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">Fach</span>
+        <select id="chartSubjectSelect">
+          <option value="__overall__">Alle Fächer (Durchschnitt)</option>
+        </select>
+      </label>
+      <canvas id="chartCanvas" width="800" height="360" class="chart-canvas"></canvas>
+      <p id="chartEmptyState" class="empty-state" hidden>Keine Daten für diese Auswahl vorhanden.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Bestätigungsdialog -->
+<div id="confirmModal" class="modal-overlay" hidden>
+  <div class="modal modal-small" role="alertdialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="modal-header">
+      <h2 id="confirmModalTitle">Bist du sicher?</h2>
+    </div>
+    <div class="modal-body">
+      <p id="confirmModalMessage"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="confirmCancelBtn">Abbrechen</button>
+        <button type="button" class="btn btn-danger" id="confirmOkBtn">Löschen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui-helpers.js"></script>
+<script src="js/render.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
